@@ -1,0 +1,41 @@
+{
+  "novels": [
+    {
+      "id": "star-ocean",
+      "title": "星辰大海",
+      "author": "墨香作者",
+      "description": "在浩瀚的宇宙中，一个少年踏上了探索星辰的旅程。他将面对未知的文明、神秘的力量，以及隐藏在宇宙深处的秘密。这是一部关于成长、友情与勇气的史诗故事。",
+      "folder": "novels/star",
+      "volumes": [
+        {
+          "name": "第一卷 启程",
+          "chapters": [
+            { "id": "ch1", "title": "第一章 星空的召唤", "file": "chapter1.txt" },
+            { "id": "ch2", "title": "第二章 离开家园", "file": "chapter2.txt" },
+            { "id": "ch3", "title": "第三章 初次航行", "file": "chapter3.txt" }
+          ]
+        }
+      ],
+      "updateTime": "2025-02-22"
+    },
+    {
+      "id": "sword-way",
+      "title": "剑道独尊",
+      "author": "武侠大师",
+      "description": "剑，是兵器之王。在这个以武为尊的世界里，一个少年凭借着一把剑，走出了属于自己的道路。他将如何在这个强者为尊的世界中，成就剑道独尊？",
+      "folder": "novels/sword",
+      "volumes": [
+        {
+          "name": "第一卷 剑起",
+          "chapters": [
+            { "id": "ch1", "title": "第一章 剑心初醒", "file": "chapter1.txt" },
+            { "id": "ch2", "title": "第二章 拜入剑宗", "file": "chapter2.txt" },
+            { "id": "ch3", "title": "第三章 剑意初成", "file": "chapter3.txt" },
+            { "id": "ch4", "title": "第四章 试剑大会", "file": "chapter4.txt" }
+          ]
+        }
+      ],
+      "updateTime": "2025-02-21"
+    }
+  ]
+}
