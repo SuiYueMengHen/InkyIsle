@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>墨香书阁 · 静读小筑</title>
+  <!-- Tailwind + 字体 + 图标 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            amber: { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f' },
+            parchment: { 50: '#fdfcf9', 100: '#f9f5ed', 200: '#f3ead7', 300: '#e8d9b8', 400: '#d4be8a' },
+            ink: { 700: '#2d2a24', 800: '#1f1e1a', 900: '#141310' }
+          },
+          fontFamily: {
+            display: ['Noto Serif SC', 'serif'],
+            body: ['Noto Sans SC', 'sans-serif'],
+            reader: ['LXGW WenKai', 'serif']
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;600;700&family=LXGW+WenKai:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Noto Sans SC', sans-serif; background: #f9f5ed; }
+    .font-reader { font-family: 'LXGW WenKai', serif; }
+    .font-display { font-family: 'Noto Serif SC', serif; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(180,83,9,0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(180,83,9,0.5); }
+
+    .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+    .glass-dark { background: rgba(20, 19, 16, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes pulse-glow { 0%,100% { box-shadow: 0 0 20px rgba(245,158,11,0.3); } 50% { box-shadow: 0 0 40px rgba(245,158,11,0.5); } }
+    .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+    .animate-slide-in { animation: slideIn 0.4s ease-out forwards; }
+    .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+
+    .page { display: none; opacity: 0; }
+    .page.active { display: block; animation: fadeIn 0.4s ease-out forwards; }
+
+    /* 阅读器主题 */
+    .theme-light { background: #fdfcf9; color: #2d2a24; }
+    .theme-sepia { background: #f3ead7; color: #5c4b32; }
+    .theme-dark { background: #1f1e1a; color: #e8d9b8; }
+    .theme-green { background: #e8f0e8; color: #2d3a2d; }
+
+    .novel-cover {
+      background: linear-gradient(135deg, #d97706 0%, #92400e 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .novel-cover::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    .spinner {
+      border: 3px solid rgba(180, 83, 9, 0.2);
+      border-top-color: #d97706;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .reading-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #f59e0b, #d97706);
+      z-index: 100;
+      transition: width 0.1s ease;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-parchment-100 via-amber-50 to-parchment-200 min-h-screen">
+
+<!-- ================= 文件架构说明 ================= -->
+<!-- data/list.json 必须存在，格式详见上一轮回答 -->
+<!-- 章节文件存放于 data/novels/小说目录名/ 下，与 list.json 中 file 字段一致 -->
+<!-- ============================================= -->
+
+<!-- 阅读进度条 -->
+<div id="readingProgress" class="reading-progress" style="width:0%; display:none;"></div>
+
+<!-- 导航栏 -->
+<nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-amber-200/30">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="showPage('home')">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-lg">
+          <i class="fas fa-book-open text-white text-lg"></i>
+        </div>
+        <span class="font-display font-bold text-xl text-ink-800">墨香书阁</span>
+      </div>
+      <div class="hidden md:flex items-center gap-6">
+        <button onclick="showPage('home')" class="nav-link text-ink-700 hover:text-amber-700 transition-colors font-medium"><i class="fas fa-home mr-2"></i>首页</button>
+        <button onclick="showPage('library')" class="nav-link text-ink-700 hover:text-amber-700 transition-colors font-medium"><i class="fas fa-book mr-2"></i>书库</button>
+        <button onclick="showPage('upload')" class="nav-link text-ink-700 hover:text-amber-700 transition-colors font-medium"><i class="fas fa-cloud-upload-alt mr-2"></i>上传</button>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSearch()" class="w-10 h-10 rounded-xl bg-amber-100 hover:bg-amber-200 flex items-center justify-center transition-all"><i class="fas fa-search text-amber-700"></i></button>
+        <button onclick="toggleMobileMenu()" class="md:hidden w-10 h-10 rounded-xl bg-amber-100 hover:bg-amber-200 flex items-center justify-center transition-all"><i class="fas fa-bars text-amber-700"></i></button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- 移动菜单 -->
+<div id="mobileMenu" class="fixed inset-0 z-40 hidden">
+  <div class="absolute inset-0 bg-black/50" onclick="toggleMobileMenu()"></div>
+  <div class="absolute right-0 top-0 bottom-0 w-72 glass p-6 pt-20">
+    <div class="flex flex-col gap-4">
+      <button onclick="showPage('home'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl hover:bg-amber-100 transition-colors"><i class="fas fa-home mr-3 text-amber-600"></i>首页</button>
+      <button onclick="showPage('library'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl hover:bg-amber-100 transition-colors"><i class="fas fa-book mr-3 text-amber-600"></i>书库</button>
+      <button onclick="showPage('upload'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl hover:bg-amber-100 transition-colors"><i class="fas fa-cloud-upload-alt mr-3 text-amber-600"></i>上传</button>
+    </div>
+  </div>
+</div>
+
+<!-- 搜索模态框 -->
+<div id="searchModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/30 backdrop-blur-sm" onclick="toggleSearch()"></div>
+  <div class="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4">
+    <div class="glass rounded-2xl p-6 shadow-2xl">
+      <div class="flex items-center gap-4 mb-4">
+        <i class="fas fa-search text-amber-600 text-xl"></i>
+        <input type="text" id="searchInput" placeholder="搜索小说、作者..." class="flex-1 bg-transparent text-lg outline-none text-ink-800 placeholder-amber-400" oninput="handleSearch(this.value)">
+        <button onclick="toggleSearch()" class="text-amber-600 hover:text-amber-800"><i class="fas fa-times text-xl"></i></button>
+      </div>
+      <div id="searchResults" class="max-h-96 overflow-y-auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 主容器 -->
+<main class="pt-20 pb-12">
+
+  <!-- 首页 -->
+  <div id="homePage" class="page active">
+    <section class="relative overflow-hidden py-16 px-4">
+      <div class="absolute inset-0 bg-gradient-to-r from-amber-600/10 to-amber-800/10"></div>
+      <div class="max-w-7xl mx-auto relative">
+        <div class="grid lg:grid-cols-2 gap-12 items-center">
+          <div class="animate-fade-in">
+            <h1 class="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-ink-800 leading-tight mb-6">在文字的世界里<br><span class="text-amber-600">寻找心灵的栖息地</span></h1>
+            <p class="text-lg text-ink-700/80 mb-8 leading-relaxed">墨香书阁，一个专注于网络小说阅读与分享的平台。真实数据取自 <code class="bg-amber-100 px-1">data/list.json</code>，逐章加载。</p>
+            <div class="flex flex-wrap gap-4">
+              <button onclick="showPage('library')" class="px-8 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all"><i class="fas fa-compass mr-2"></i>探索书库</button>
+              <button onclick="showPage('upload')" class="px-8 py-4 glass text-amber-800 rounded-2xl font-semibold hover:bg-amber-100 transition-all"><i class="fas fa-pen-fancy mr-2"></i>开始创作</button>
+            </div>
+          </div>
+          <div class="hidden lg:flex justify-center">
+            <div class="relative">
+              <div class="w-72 h-96 rounded-3xl novel-cover shadow-2xl animate-pulse-glow flex items-center justify-center"><div class="text-center text-white/90 p-8"><i class="fas fa-book-reader text-6xl mb-4"></i><p class="font-display text-xl">沉浸阅读</p></div></div>
+              <div class="absolute -bottom-6 -left-6 w-48 h-64 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-xl transform -rotate-6 flex items-center justify-center"><i class="fas fa-feather-alt text-white text-4xl"></i></div>
+              <div class="absolute -top-4 -right-4 w-32 h-32 rounded-full bg-amber-200/50 backdrop-blur flex items-center justify-center"><span class="font-display text-amber-800 font-bold text-lg">免费<br>阅读</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="py-12 px-4">
+      <div class="max-w-7xl mx-auto">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div class="glass rounded-2xl p-6 text-center"><div class="text-3xl font-bold text-amber-600 mb-2" id="statBooks">0</div><div class="text-ink-600">收录小说</div></div>
+          <div class="glass rounded-2xl p-6 text-center"><div class="text-3xl font-bold text-amber-600 mb-2" id="statChapters">0</div><div class="text-ink-600">章节总数</div></div>
+          <div class="glass rounded-2xl p-6 text-center"><div class="text-3xl font-bold text-amber-600 mb-2">24/7</div><div class="text-ink-600">随时阅读</div></div>
+          <div class="glass rounded-2xl p-6 text-center"><div class="text-3xl font-bold text-amber-600 mb-2">免费</div><div class="text-ink-600">永久免费</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="py-12 px-4">
+      <div class="max-w-7xl mx-auto">
+        <div class="flex items-center justify-between mb-8"><h2 class="font-display text-2xl font-bold text-ink-800"><i class="fas fa-clock text-amber-600 mr-3"></i>最近更新</h2><button onclick="showPage('library')" class="text-amber-600 hover:text-amber-700 font-medium">查看全部 <i class="fas fa-arrow-right ml-1"></i></button></div>
+        <div id="recentUpdates" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </div>
+    </section>
+
+    <section class="py-16 px-4 bg-gradient-to-b from-transparent to-amber-100/50">
+      <div class="max-w-7xl mx-auto"><h2 class="font-display text-3xl font-bold text-ink-800 text-center mb-12">为什么选择墨香书阁</h2>
+        <div class="grid md:grid-cols-3 gap-8">
+          <div class="glass rounded-3xl p-8"><div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mb-6"><i class="fas fa-bolt text-white text-2xl"></i></div><h3 class="font-display text-xl font-bold text-ink-800 mb-3">极速加载</h3><p class="text-ink-600">章节按需加载，看完一章再请求下一章，节省流量。</p></div>
+          <div class="glass rounded-3xl p-8"><div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mb-6"><i class="fas fa-palette text-white text-2xl"></i></div><h3 class="font-display text-xl font-bold text-ink-800 mb-3">个性主题</h3><p class="text-ink-600">日间/复古/夜间/护眼，阅读器内一键切换，包括深色模式。</p></div>
+          <div class="glass rounded-3xl p-8"><div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mb-6"><i class="fas fa-bookmark text-white text-2xl"></i></div><h3 class="font-display text-xl font-bold text-ink-800 mb-3">进度记忆</h3><p class="text-ink-600">自动保存阅读进度，本地存储，下次继续。</p></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 书库页面 -->
+  <div id="libraryPage" class="page">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <h1 class="font-display text-3xl font-bold text-ink-800"><i class="fas fa-book text-amber-600 mr-3"></i>书库</h1>
+        <div class="flex items-center gap-3">
+          <select id="sortSelect" onchange="sortNovels(this.value)" class="px-4 py-2 rounded-xl bg-white/70 border border-amber-200 text-ink-700 outline-none focus:border-amber-400">
+            <option value="update">最新更新</option><option value="name">名称排序</option><option value="chapters">章节数</option>
+          </select>
+        </div>
+      </div>
+      <div id="novelList" class="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+      <div id="emptyLibrary" class="hidden text-center py-20">
+        <div class="w-24 h-24 mx-auto mb-6 rounded-full bg-amber-100 flex items-center justify-center"><i class="fas fa-book-open text-amber-400 text-4xl"></i></div>
+        <h3 class="text-xl font-medium text-ink-600 mb-2">书库暂无小说</h3>
+        <p class="text-ink-500">请根据规范创建 <code class="bg-amber-100 px-1">data/list.json</code> 并放入章节txt</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 阅读器页面 -->
+  <div id="readerPage" class="page">
+    <div id="readerContainer" class="theme-light min-h-screen">
+      <!-- 阅读器头部 -->
+      <div class="sticky top-16 z-30 glass border-b border-amber-200/30">
+        <div class="max-w-4xl mx-auto px-4 py-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <button onclick="closeReader()" class="w-10 h-10 rounded-xl hover:bg-amber-100 flex items-center justify-center"><i class="fas fa-arrow-left text-amber-700"></i></button>
+              <div><h2 id="readerTitle" class="font-medium text-ink-800 truncate max-w-xs"></h2><p id="readerChapter" class="text-sm text-ink-500"></p></div>
+            </div>
+            <button onclick="toggleSettings()" class="w-10 h-10 rounded-xl hover:bg-amber-100 flex items-center justify-center"><i class="fas fa-cog text-amber-700"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 顶部导航按钮 -->
+      <div class="max-w-4xl mx-auto px-4 py-4">
+        <div class="flex items-center justify-between gap-4">
+          <button id="prevChapterBtn" onclick="prevChapter()" class="flex-1 py-3 rounded-xl glass hover:bg-amber-100 disabled:opacity-50" disabled><i class="fas fa-chevron-left mr-2"></i>上一章</button>
+          <button onclick="showChapterList()" class="px-6 py-3 rounded-xl glass hover:bg-amber-100"><i class="fas fa-list mr-2"></i>目录</button>
+          <button id="nextChapterBtn" onclick="nextChapter()" class="flex-1 py-3 rounded-xl glass hover:bg-amber-100 disabled:opacity-50" disabled>下一章<i class="fas fa-chevron-right ml-2"></i></button>
+        </div>
+      </div>
+
+      <!-- 章节内容区 -->
+      <div class="max-w-4xl mx-auto px-4 py-8">
+        <div id="chapterContent" class="font-reader text-lg leading-loose hidden"></div>
+        <div id="loadingChapter" class="hidden text-center py-20"><div class="spinner mx-auto mb-4"></div><p class="text-ink-500">正在加载章节...</p></div>
+      </div>
+
+      <!-- 底部导航按钮 -->
+      <div class="max-w-4xl mx-auto px-4 py-8">
+        <div class="flex items-center justify-between gap-4">
+          <button id="prevChapterBtn2" onclick="prevChapter()" class="flex-1 py-4 rounded-xl glass hover:bg-amber-100 disabled:opacity-50 font-medium" disabled><i class="fas fa-chevron-left mr-2"></i>上一章</button>
+          <button id="nextChapterBtn2" onclick="nextChapter()" class="flex-1 py-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:shadow-lg disabled:opacity-50 font-medium" disabled>下一章<i class="fas fa-chevron-right ml-2"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div id="settingsPanel" class="fixed inset-0 z-50 hidden">
+      <div class="absolute inset-0 bg-black/30" onclick="toggleSettings()"></div>
+      <div class="absolute right-0 top-0 bottom-0 w-80 glass-dark p-6 overflow-y-auto">
+        <div class="flex items-center justify-between mb-6"><h3 class="font-display text-xl font-bold text-parchment-200">阅读设置</h3><button onclick="toggleSettings()" class="text-parchment-300 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+        <div class="space-y-6">
+          <div><label class="text-parchment-300 text-sm mb-3 block">字体大小</label><div class="flex items-center gap-3"><button onclick="changeFontSize(-2)" class="w-10 h-10 rounded-lg bg-amber-900/50 text-parchment-200 hover:bg-amber-800"><i class="fas fa-minus"></i></button><div id="fontSizeDisplay" class="flex-1 text-center text-parchment-200 font-medium">18px</div><button onclick="changeFontSize(2)" class="w-10 h-10 rounded-lg bg-amber-900/50 text-parchment-200 hover:bg-amber-800"><i class="fas fa-plus"></i></button></div></div>
+          <div><label class="text-parchment-300 text-sm mb-3 block">阅读主题</label><div class="grid grid-cols-4 gap-2"><button onclick="setTheme('light')" class="aspect-square rounded-xl bg-parchment-50 border-2 border-transparent hover:border-amber-500" title="日间"></button><button onclick="setTheme('sepia')" class="aspect-square rounded-xl bg-parchment-300 border-2 border-transparent hover:border-amber-500" title="复古"></button><button onclick="setTheme('dark')" class="aspect-square rounded-xl bg-ink-800 border-2 border-transparent hover:border-amber-500" title="夜间"></button><button onclick="setTheme('green')" class="aspect-square rounded-xl bg-emerald-100 border-2 border-transparent hover:border-amber-500" title="护眼"></button></div></div>
+          <div><label class="text-parchment-300 text-sm mb-3 block">行间距</label><input type="range" min="1.5" max="2.5" step="0.1" value="1.8" onchange="changeLineHeight(this.value)" class="w-full accent-amber-500"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 章节目录模态框 -->
+    <div id="chapterListModal" class="fixed inset-0 z-50 hidden">
+      <div class="absolute inset-0 bg-black/30 backdrop-blur-sm" onclick="showChapterList()"></div>
+      <div class="absolute left-0 top-0 bottom-0 w-96 max-w-full glass p-6 overflow-y-auto">
+        <div class="flex items-center justify-between mb-6"><h3 class="font-display text-xl font-bold text-ink-800">章节目录</h3><button onclick="showChapterList()" class="text-ink-500 hover:text-ink-800"><i class="fas fa-times text-xl"></i></button></div>
+        <div id="chapterList" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 上传页面 (说明/生成器) -->
+  <div id="uploadPage" class="page">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+      <div class="text-center mb-12"><h1 class="font-display text-3xl font-bold text-ink-800 mb-4"><i class="fas fa-cloud-upload-alt text-amber-600 mr-3"></i>小说上传</h1><p class="text-ink-600">分享你的作品，让更多人阅读</p></div>
+      <div class="glass rounded-3xl p-8 shadow-xl">
+        <div class="mb-8 p-6 rounded-2xl bg-amber-50 border border-amber-200">
+          <h3 class="font-medium text-ink-800 mb-3"><i class="fas fa-info-circle text-amber-600 mr-2"></i>文件规范</h3>
+          <ul class="text-ink-600 text-sm space-y-2">
+            <li>📁 <code class="px-2 py-1 bg-amber-100 rounded">data/list.json</code> 必须符合 JSON 格式，包含 novels 数组。</li>
+            <li>📁 章节txt存放于 <code class="px-2 py-1 bg-amber-100 rounded">data/novels/你的文件夹/</code> 内，文件名与 list.json 中 "file" 字段一致。</li>
+            <li>🔄 推送至 GitHub Pages 后自动生效，所有路径均相对于根目录。</li>
+          </ul>
+        </div>
+        <div class="mb-8"><h3 class="font-medium text-ink-800 mb-4">list.json 示例</h3><pre class="p-4 rounded-xl bg-ink-800 text-parchment-200 text-sm overflow-x-auto"><code>{
+  "novels": [{
+    "id": "sword-dao",
+    "title": "剑道独尊",
+    "author": "武侠大师",
+    "description": "简介...",
+    "folder": "novels/sword",
+    "volumes": [{
+      "name": "第一卷",
+      "chapters": [
+        {"id": "ch1", "title": "第一章 剑心", "file": "chapter1.txt"}
+      ]
+    }],
+    "updateTime": "2025-02-22"
+  }]
+}</code></pre></div>
+
+        <div class="border-t border-amber-200 pt-8">
+          <h3 class="font-medium text-ink-800 mb-4">快速生成小说条目 (JSON片段)</h3>
+          <form id="addNovelForm" onsubmit="generateListEntry(event)" class="space-y-4">
+            <div class="grid md:grid-cols-2 gap-4"><div><label class="block text-sm text-ink-600 mb-2">小说名称</label><input type="text" id="novelTitle" required class="w-full px-4 py-3 rounded-xl bg-white/70 border border-amber-200"></div><div><label class="block text-sm text-ink-600 mb-2">作者</label><input type="text" id="novelAuthor" required class="w-full px-4 py-3 rounded-xl bg-white/70 border border-amber-200"></div></div>
+            <div><label class="block text-sm text-ink-600 mb-2">简介</label><textarea id="novelDesc" rows="3" class="w-full px-4 py-3 rounded-xl bg-white/70 border border-amber-200 resize-none"></textarea></div>
+            <div><label class="block text-sm text-ink-600 mb-2">文件夹名称 (相对data, 如 novels/mybook)</label><input type="text" id="novelFolder" placeholder="novels/示例" required class="w-full px-4 py-3 rounded-xl bg-white/70 border border-amber-200"></div>
+            <button type="submit" class="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl font-semibold hover:shadow-lg"><i class="fas fa-magic mr-2"></i>生成配置代码</button>
+          </form>
+          <div id="generatedOutput" class="hidden mt-6"><h4 class="font-medium text-ink-800 mb-2">生成的条目 (复制到 list.json 的 novels 数组)</h4><pre id="generatedCode" class="p-4 rounded-xl bg-ink-800 text-parchment-200 text-sm overflow-x-auto"></pre><button onclick="copyGenerated()" class="mt-3 px-4 py-2 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200"><i class="fas fa-copy mr-2"></i>复制</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="glass border-t border-amber-200/30 py-8 px-4 mt-auto"><div class="max-w-7xl mx-auto text-center"><p class="text-ink-600 text-sm"><i class="fas fa-heart text-amber-500 mx-1"></i>墨香书阁 - 静心阅读，品味文字之美</p><p class="text-ink-500 text-xs mt-2">基于真实 data/list.json · 适配 GitHub Pages</p></div></footer>
+
+<script>
+  (function() {
+    // ---------- 全局状态 ----------
+    let novelsData = { novels: [] };
+    let currentNovel = null;
+    let currentVolumeIndex = 0;
+    let currentChapterIndex = 0;
+    let readerSettings = { fontSize: 18, lineHeight: 1.8, theme: 'light' };
+
+    // ---------- 加载 list.json ----------
+    async function loadNovelList() {
+      try {
+        const res = await fetch('data/list.json');
+        if (res.ok) {
+          const text = await res.text();
+          novelsData = JSON.parse(text);
+          if (!novelsData.novels) novelsData.novels = [];
+        } else {
+          console.warn('data/list.json 不存在，书库为空');
+          novelsData.novels = [];
+        }
+      } catch (e) {
+        console.error('读取 list.json 失败', e);
+        novelsData.novels = [];
+      }
+      renderHomePage();
+      renderLibraryPage();
+      animateStats();
+    }
+
+    // ---------- 渲染首页 & 书库 ----------
+    function renderHomePage() {
+      const container = document.getElementById('recentUpdates');
+      const recent = novelsData.novels.slice(0, 6);
+      if (!recent.length) { container.innerHTML = '<p class="text-ink-500 col-span-full text-center py-10">暂无小说，请创建 data/list.json</p>'; return; }
+      container.innerHTML = recent.map((n,i)=>createNovelCard(n,i)).join('');
+    }
+
+    function renderLibraryPage() {
+      const container = document.getElementById('novelList');
+      const empty = document.getElementById('emptyLibrary');
+      if (!novelsData.novels.length) {
+        container.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      container.innerHTML = novelsData.novels.map((n,i)=>createNovelCard(n,i)).join('');
+    }
+
+    function createNovelCard(novel, idx) {
+      const totalCh = novel.volumes ? novel.volumes.reduce((acc, v) => acc + (v.chapters?.length || 0), 0) : 0;
+      return `<div class="glass rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 cursor-pointer group animate-fade-in" style="animation-delay:${idx*0.1}s" onclick="openNovel('${novel.id}')">
+        <div class="novel-cover h-40 flex items-center justify-center"><div class="text-center text-white/90 p-4"><i class="fas fa-book text-4xl mb-2"></i><p class="font-display text-lg line-clamp-1">${escapeHtml(novel.title)}</p></div></div>
+        <div class="p-5"><h3 class="font-display font-bold text-lg text-ink-800 mb-2 group-hover:text-amber-700 line-clamp-1">${escapeHtml(novel.title)}</h3>
+        <p class="text-sm text-ink-500 mb-3"><i class="fas fa-user mr-1"></i>${escapeHtml(novel.author)} <span class="mx-2">·</span> <i class="fas fa-book-open mr-1"></i>${totalCh}章</p>
+        <p class="text-sm text-ink-600 line-clamp-2 mb-3">${escapeHtml(novel.description || '暂无简介')}</p>
+        <div class="flex items-center justify-between text-xs text-ink-400"><span><i class="fas fa-clock mr-1"></i>${escapeHtml(novel.updateTime || '未知')}</span><span class="text-amber-600 font-medium group-hover:translate-x-1 transition">开始阅读 <i class="fas fa-arrow-right"></i></span></div></div></div>`;
+    }
+
+    // 简单的转义函数，防止XSS
+    function escapeHtml(unsafe) {
+      if (!unsafe) return unsafe;
+      return unsafe.replace(/[&<>"]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        if (m === '"') return '&quot;';
+        return m;
+      });
+    }
+
+    function animateStats() {
+      const booksEl = document.getElementById('statBooks');
+      const chEl = document.getElementById('statChapters');
+      const totalCh = novelsData.novels.reduce((sum, n) => sum + (n.volumes ? n.volumes.reduce((s, v) => s + (v.chapters?.length || 0), 0) : 0), 0);
+      animateNumber(booksEl, novelsData.novels.length);
+      animateNumber(chEl, totalCh);
+    }
+    function animateNumber(el, target) { let cur=0, step=Math.ceil(target/30); const t = setInterval(() => { cur+=step; if(cur>=target) { cur=target; clearInterval(t); } el.textContent = cur; }, 30); }
+
+    // ---------- 阅读器核心 ----------
+    window.openNovel = function(novelId) {
+      const novel = novelsData.novels.find(n => n.id === novelId);
+      if (!novel) return;
+      currentNovel = novel;
+      const saved = localStorage.getItem(`progress_${novelId}`);
+      if (saved) { const p = JSON.parse(saved); currentVolumeIndex = p.volumeIndex || 0; currentChapterIndex = p.chapterIndex || 0; }
+      else { currentVolumeIndex = 0; currentChapterIndex = 0; }
+
+      if (!currentNovel.volumes || currentNovel.volumes.length === 0 || !currentNovel.volumes[0].chapters?.length) {
+        alert('该小说暂无章节'); return;
+      }
+      // 确保索引有效
+      if (currentVolumeIndex >= currentNovel.volumes.length) currentVolumeIndex = 0;
+      if (currentChapterIndex >= currentNovel.volumes[currentVolumeIndex].chapters.length) currentChapterIndex = 0;
+      showPage('reader');
+      loadChapter();
+    };
+
+    async function loadChapter() {
+      if (!currentNovel) return;
+      const volume = currentNovel.volumes[currentVolumeIndex];
+      if (!volume) return;
+      const chapter = volume.chapters[currentChapterIndex];
+      if (!chapter) return;
+
+      document.getElementById('readerTitle').textContent = currentNovel.title;
+      document.getElementById('readerChapter').textContent = `${volume.name} - ${chapter.title}`;
+      document.getElementById('chapterContent').classList.add('hidden');
+      document.getElementById('loadingChapter').classList.remove('hidden');
+      updateNavButtons();
+
+      try {
+        const path = `data/${currentNovel.folder}/${chapter.file}`;
+        const res = await fetch(path);
+        let content = '';
+        if (res.ok) {
+          content = await res.text();
+        } else {
+          content = `\n【章节内容未找到】\n请确保文件存在：\n${path}\n\n如果您是站长，请参考上传页面的规范。`;
+        }
+        document.getElementById('chapterContent').innerHTML = formatChapterContent(chapter.title, content);
+      } catch (err) {
+        document.getElementById('chapterContent').innerHTML = formatChapterContent(chapter.title, `\n加载失败：${err.message}\n请检查网络或路径。`);
+      } finally {
+        document.getElementById('loadingChapter').classList.add('hidden');
+        document.getElementById('chapterContent').classList.remove('hidden');
+        applyReaderSettings();
+        saveProgress();
+        window.scrollTo(0,0);
+      }
+    }
+
+    function formatChapterContent(title, text) {
+      // 对标题和正文进行转义
+      const safeTitle = escapeHtml(title);
+      const paragraphs = text.split('\n').map(p => p.trim()).filter(p => p).map(p => `<p class="mb-4 text-justify">${escapeHtml(p)}</p>`).join('');
+      return `<h1 class="font-display text-2xl font-bold mb-8 text-center">${safeTitle}</h1><div class="chapter-text">${paragraphs || '<p class="text-ink-400">（空章节）</p>'}</div>`;
+    }
+
+    function updateNavButtons() {
+      const hasPrev = (currentVolumeIndex > 0 || currentChapterIndex > 0);
+      const hasNext = (() => { if (!currentNovel) return false; const v = currentNovel.volumes[currentVolumeIndex]; if (currentChapterIndex < v.chapters.length-1) return true; if (currentVolumeIndex < currentNovel.volumes.length-1) return true; return false; })();
+      ['prevChapterBtn','prevChapterBtn2'].forEach(id => document.getElementById(id).disabled = !hasPrev);
+      ['nextChapterBtn','nextChapterBtn2'].forEach(id => document.getElementById(id).disabled = !hasNext);
+    }
+
+    window.prevChapter = function() {
+      if (!currentNovel) return;
+      if (currentChapterIndex > 0) { currentChapterIndex--; }
+      else if (currentVolumeIndex > 0) { currentVolumeIndex--; currentChapterIndex = currentNovel.volumes[currentVolumeIndex].chapters.length - 1; }
+      else return;
+      loadChapter();
+    };
+    window.nextChapter = function() {
+      if (!currentNovel) return;
+      const v = currentNovel.volumes[currentVolumeIndex];
+      if (currentChapterIndex < v.chapters.length - 1) { currentChapterIndex++; }
+      else if (currentVolumeIndex < currentNovel.volumes.length - 1) { currentVolumeIndex++; currentChapterIndex = 0; }
+      else return;
+      loadChapter();
+    };
+
+    function saveProgress() {
+      if (currentNovel) localStorage.setItem(`progress_${currentNovel.id}`, JSON.stringify({ volumeIndex: currentVolumeIndex, chapterIndex: currentChapterIndex }));
+    }
+
+    window.showChapterList = function() {
+      if (!currentNovel) return;
+      const modal = document.getElementById('chapterListModal');
+      const list = document.getElementById('chapterList');
+      if (modal.classList.contains('hidden')) {
+        list.innerHTML = currentNovel.volumes.map((vol, vi) => `<div class="mb-4"><h4 class="font-medium text-ink-800 mb-2 px-2">${escapeHtml(vol.name)}</h4><div class="space-y-1">${
+          vol.chapters.map((ch, ci) => `<button onclick="goToChapter(${vi},${ci})" class="w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${(vi===currentVolumeIndex && ci===currentChapterIndex) ? 'bg-amber-100 text-amber-800' : 'hover:bg-amber-50 text-ink-600'}">${escapeHtml(ch.title)}</button>`).join('')
+        }</div></div>`).join('');
+        modal.classList.remove('hidden');
+      } else { modal.classList.add('hidden'); }
+    };
+    window.goToChapter = function(v, c) { currentVolumeIndex = v; currentChapterIndex = c; showChapterList(); loadChapter(); };
+
+    window.closeReader = function() { showPage('library'); };
+
+    // ---------- 阅读器设置 ----------
+    window.toggleSettings = function() { document.getElementById('settingsPanel').classList.toggle('hidden'); };
+    window.changeFontSize = function(delta) { readerSettings.fontSize = Math.min(28, Math.max(14, readerSettings.fontSize+delta)); document.getElementById('fontSizeDisplay').innerText = readerSettings.fontSize+'px'; applyReaderSettings(); };
+    window.changeLineHeight = function(val) { readerSettings.lineHeight = parseFloat(val); applyReaderSettings(); };
+    window.setTheme = function(theme) { readerSettings.theme = theme; document.getElementById('readerContainer').className = `theme-${theme} min-h-screen`; };
+    function applyReaderSettings() { const el = document.getElementById('chapterContent'); if (el) { el.style.fontSize = readerSettings.fontSize+'px'; el.style.lineHeight = readerSettings.lineHeight; } }
+
+    // ---------- 页面切换 ----------
+    window.showPage = function(pid) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(pid+'Page').classList.add('active');
+      window.scrollTo(0,0);
+      document.getElementById('readingProgress').style.display = (pid==='reader') ? 'block' : 'none';
+    };
+
+    // ---------- 搜索 ----------
+    window.toggleSearch = function() {
+      const m = document.getElementById('searchModal');
+      m.classList.toggle('hidden');
+      if (!m.classList.contains('hidden')) document.getElementById('searchInput').focus();
+      else document.getElementById('searchResults').innerHTML = '';
+    };
+    window.handleSearch = function(q) {
+      const resDiv = document.getElementById('searchResults');
+      if (!q.trim()) { resDiv.innerHTML = ''; return; }
+      const filtered = novelsData.novels.filter(n => n.title.includes(q) || n.author.includes(q));
+      if (!filtered.length) { resDiv.innerHTML = '<p class="text-ink-500 text-center py-4">未找到</p>'; return; }
+      resDiv.innerHTML = filtered.map(n => `<button onclick="openNovel('${n.id}'); toggleSearch();" class="w-full text-left p-4 rounded-xl hover:bg-amber-100"><div class="font-medium text-ink-800">${escapeHtml(n.title)}</div><div class="text-sm text-ink-500">${escapeHtml(n.author)}</div></button>`).join('');
+    };
+
+    // ---------- 移动菜单 ----------
+    window.toggleMobileMenu = function() { document.getElementById('mobileMenu').classList.toggle('hidden'); };
+
+    // ---------- 排序 ----------
+    window.sortNovels = function(by) {
+      if (by === 'name') novelsData.novels.sort((a,b)=>a.title.localeCompare(b.title,'zh'));
+      else if (by === 'chapters') novelsData.novels.sort((a,b)=> { const ac = a.volumes?.reduce((s,v)=>s+v.chapters.length,0)||0; const bc = b.volumes?.reduce((s,v)=>s+v.chapters.length,0)||0; return bc - ac; });
+      else novelsData.novels.sort((a,b)=> (b.updateTime||'').localeCompare(a.updateTime||''));
+      renderLibraryPage();
+    };
+
+    // ---------- 上传表单生成 ----------
+    window.generateListEntry = function(e) {
+      e.preventDefault();
+      const title = document.getElementById('novelTitle').value;
+      const author = document.getElementById('novelAuthor').value;
+      const desc = document.getElementById('novelDesc').value;
+      const folder = document.getElementById('novelFolder').value;
+      const id = title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g,'');
+      const entry = { id, title, author, description: desc, folder, volumes: [{ name: "第一卷", chapters: [{ id: "ch1", title: "第一章", file: "chapter1.txt" }] }], updateTime: new Date().toISOString().split('T')[0] };
+      document.getElementById('generatedCode').innerText = JSON.stringify(entry, null, 2);
+      document.getElementById('generatedOutput').classList.remove('hidden');
+    };
+    window.copyGenerated = function() { navigator.clipboard.writeText(document.getElementById('generatedCode').innerText).then(()=>alert('已复制')); };
+
+    // ---------- 阅读进度条 ----------
+    window.addEventListener('scroll', function() {
+      if (document.getElementById('readerPage').classList.contains('active')) {
+        const st = window.scrollY, dh = document.documentElement.scrollHeight - window.innerHeight;
+        document.getElementById('readingProgress').style.width = (st / dh * 100) + '%';
+      }
+    });
+
+    // ---------- 键盘导航 ----------
+    document.addEventListener('keydown', function(e) {
+      if (!document.getElementById('readerPage').classList.contains('active')) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prevChapter(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); nextChapter(); }
+      else if (e.key === 'Escape') { 
+        if (!document.getElementById('settingsPanel').classList.contains('hidden')) toggleSettings();
+        else if (!document.getElementById('chapterListModal').classList.contains('hidden')) showChapterList();
+        else closeReader();
+      }
+    });
+
+    // 启动
+    loadNovelList();
+  })();
+</script>
+</body>
+</html>
